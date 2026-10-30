@@ -1,0 +1,8 @@
+mods/space-groups/sidebar.js and mods/space-groups/menu.js are adapted from the
+`spaces` and `menu` mods shipped with the Herdr app
+(https://github.com/herdrdev/herdr-app), licensed under the Apache License,
+Version 2.0 (see LICENSE-APACHE). They were changed to add space groups: group
+sections in the sidebar, dragging spaces between groups, the group items in the
+space menu, the group menu, and the shared `space-groups.menu` items.
+
+Everything else in this repository is under the MIT License (see LICENSE).
