@@ -13,6 +13,10 @@ Everything else is Herdr's own Spaces sidebar.
 - A group's space rows are indented 12px from the left.
 - A folded group hides its rows; when it holds the shown space, its header gets the `selected` background.
 - The collapsed rail (sidebar under 160px) shows a centered folder icon per group, and hides a folded group's numbered rows.
+- The Agents list as Herdr ships it, with a third sort, "Grouped by folder" (`folder.svg`), after Priority and Grouped by space.
+  It shows a section per group holding agents, local machine first, then the other machines by name, each machine's groups in their stored order, then a "No folder" section.
+  Section headers look like Grouped by space's; inside a section agents keep Grouped by space's order and their rows name their space, as in Priority.
+  With no agent in any group (or no `space-groups` state at all), it is one plain list with no header.
 
 **How it behaves:**
 
@@ -29,6 +33,7 @@ Everything else is Herdr's own Spaces sidebar.
   A nested worktree row only moves.
 - Drag a group header onto another group header of the same machine: the same accent line shows whether it lands above or below; on release the group, with its spaces, moves there.
   A click without a drag still folds it.
+- Clicking a section header in Grouped by folder folds it in the Agents list only, apart from the group's fold in the sidebar.
 - Groups live in shared `space-groups`: `{ groups: [{ id, name, machine, folded }], spaces: { <space id>: <group id> } }`, in the order shown.
   Space ids carry their machine.
   An entry whose space is gone is dropped once that machine's layout is `ready`.
@@ -37,12 +42,13 @@ Everything else is Herdr's own Spaces sidebar.
 
 - One mod, `space-groups`, used as the content of the layout's spaces block; it opens its menu (popup, 200 wide, at most 360 tall) and dialogs as overlays of itself with `props.role` = `menu`, `move` or `rename`.
 - `sidebar.js` and `menu.js` start from Herdr's `spaces` and `menu` mods; `groups.js` holds the shared state; `dialogs.js` the two dialogs.
+- A second mod, `space-groups-agents`, used as the content of the layout's agents block: Herdr's `agents` mod with the extra sort, reading the groups straight from shared `space-groups` and sharing the sort choice (`agents.sort`) with it; its sort menu opens as an overlay of itself.
 - Icons from `mods/workspace-chrome/`: folder, folder-plus, minus, check, chevrons, plus the ones the shipped sidebar and menu use; `arrow-up.svg` and `arrow-down.svg` (Lucide) ship in the mod for Move up and Move down.
 - Other mods add space menu items through shared `space-groups.menu`: `{ <mod>: [{ label, icon?, spaces?, except?, overlay }] }`; the overlay opens with `space` added to its props.
 
 **Watch out:**
 
-- Mods can't import another mod's files, so the shipped sidebar and menu are copied, not extended.
+- Mods can't import another mod's files, so the shipped sidebar, menu and agents list are copied, not extended, and `space-groups-agents` reads the shared state itself.
 - A dialog with no height fits its content, and a scrolling list inside it collapses unless it gets an explicit height.
 - `localStorage` is per mod copy; groups are in shared state so every copy and layout agrees.
 - Don't prune entries for a machine that is loading or away: its spaces are missing then.
@@ -56,3 +62,4 @@ Everything else is Herdr's own Spaces sidebar.
 - Switching to a space in a folded group from outside the sidebar unfolds that group.
 - Dragging a space onto another group's row or header moves it into that group.
 - Dragging a group header, or Move up / Move down, reorders the machine's groups, and the order survives a restart.
+- A layout whose agents block uses `space-groups-agents` offers Grouped by folder, which lists agents under their spaces' groups in the sidebar's group order with the rest under No folder, and the other two sorts unchanged.

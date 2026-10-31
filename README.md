@@ -19,7 +19,7 @@ Read ~/.config/herdr-app/AGENTS.md, then add this mod: github.com/suppa-duppa-la
 Or by hand, on the computer that runs the Herdr app (run it again to update):
 
 ```sh
-mkdir -p ~/.config/herdr-app/mods && curl -fsSL https://github.com/suppa-duppa-labs/herdr-space-groups/archive/main.tar.gz | tar -xz -C ~/.config/herdr-app/mods --strip-components=2 herdr-space-groups-main/mods/space-groups
+mkdir -p ~/.config/herdr-app/mods && curl -fsSL https://github.com/suppa-duppa-labs/herdr-space-groups/archive/main.tar.gz | tar -xz -C ~/.config/herdr-app/mods --strip-components=2 herdr-space-groups-main/mods/space-groups herdr-space-groups-main/mods/space-groups-agents
 ```
 
 ## Turn it on
@@ -36,6 +36,12 @@ In `~/.config/herdr-app/layouts/my-layout.json`, set the Spaces block's `"mod"` 
 { "id": "spaces", "type": "block", "content": { "mod": "space-groups" } }
 ```
 
+To also group the Agents list by these groups, set the Agents block's `"mod"` to `"space-groups-agents"`:
+
+```json
+{ "id": "agents", "type": "block", "content": { "mod": "space-groups-agents" } }
+```
+
 ## Use
 
 <p align="center">
@@ -48,6 +54,7 @@ In `~/.config/herdr-app/layouts/my-layout.json`, set the Spaces block's `"mod"` 
 | Move or reorder spaces | Drag a space onto another space or onto a group's header. |
 | Reorder groups | Drag a group's header above or below another, or right-click it and choose **Move up** or **Move down**. |
 | Fold, rename or delete a group | Click its header to fold it, or right-click it for **Rename group** and **Delete group**. |
+| See agents by group | In the Agents list, open the sort menu and choose **Grouped by folder**. |
 
 Switching to a space in a folded group unfolds it.
 
@@ -59,4 +66,4 @@ Switching to a space in a folded group unfolds it.
 
 Groups are stored on the computer running the app, in `shared.json` under `space-groups`, and make no network requests.
 Tested with Herdr app 0.1.9; other mods can add space menu items through `space-groups.menu`, see [RECIPE.md](RECIPE.md), the brief to build the mod from scratch.
-MIT, see [LICENSE](LICENSE); `sidebar.js` and `menu.js` are adapted from the [Herdr app](https://github.com/herdrdev/herdr-app)'s `spaces` and `menu` mods under Apache 2.0, see [NOTICE](NOTICE).
+MIT, see [LICENSE](LICENSE); `sidebar.js`, `menu.js` and `space-groups-agents` are adapted from the [Herdr app](https://github.com/herdrdev/herdr-app)'s `spaces`, `menu` and `agents` mods under Apache 2.0, see [NOTICE](NOTICE).

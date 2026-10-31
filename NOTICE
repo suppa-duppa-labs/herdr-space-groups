@@ -6,6 +6,10 @@ sections in the sidebar, dragging spaces between groups, the group items in the
 space menu, the group menu, reordering groups, and the shared `space-groups.menu`
 items.
 
+mods/space-groups-agents/main.js is adapted from the `agents` mod shipped with the
+Herdr app, under the same license. It was changed to add the "Grouped by folder"
+sort, which groups agents under the space groups.
+
 mods/space-groups/arrow-up.svg and mods/space-groups/arrow-down.svg are Lucide
 icons (https://lucide.dev), licensed under the ISC License,
 Copyright (c) Lucide Contributors.
