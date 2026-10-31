@@ -1,55 +1,98 @@
-# herdr-space-groups
+# Space groups for Herdr
 
-Group spaces by hand in the Spaces sidebar of the [Herdr app](https://herdr.dev).
+Folders for the Spaces sidebar of the [Herdr](https://herdr.dev) desktop app.
+Put your spaces in groups you name yourself, fold the ones you are not working on, and drag spaces between them.
 
-![Spaces sidebar with groups](preview.png)
+<p align="center">
+  <img src="preview.png" width="268" alt="Spaces sidebar with groups">
+</p>
 
-The mod is the Spaces sidebar with groups added.
-Groups sit inside each machine's section and fold like the machine headers, with spaces in no group listed below them.
-Everything else works as in Herdr's own sidebar: switching, the space menu, drag to reorder, the collapsed rail, repo and branch hints, and worktrees under their checkout.
+- **Groups per machine.** Each machine's section gets its own groups, with the spaces in no group listed below them.
+- **Fold away.** Click a group's header to fold it; a folded group that holds the shown space stays highlighted.
+- **Drag and drop.** Drag a space onto another group's space or header to move it there.
+- **Kept across restarts.** Groups and their folded state survive restarts and app updates.
+- **Everything else stays.** It is Herdr's own Spaces sidebar with groups added: switching, the space menu, worktrees under their checkout, repo and branch hints, the collapsed rail.
 
 ## Install
 
-On the computer that runs the Herdr app:
+Ask the agent in your Herdr window:
+
+```text
+Read ~/.config/herdr-app/AGENTS.md, then add this mod: github.com/suppa-duppa-labs/herdr-space-groups
+```
+
+It reads [RECIPE.md](RECIPE.md) and the files, copies `mods/space-groups/` into `~/.config/herdr-app/mods/`, and checks it.
+
+Or by hand, on the computer that runs the Herdr app:
 
 ```sh
-git clone https://github.com/suppa-duppa-labs/herdr-space-groups
-cp -r herdr-space-groups/mods/space-groups ~/.config/herdr-app/mods/
+mkdir -p ~/.config/herdr-app/mods && curl -fsSL https://github.com/suppa-duppa-labs/herdr-space-groups/archive/main.tar.gz | tar -xz -C ~/.config/herdr-app/mods --strip-components=2 herdr-space-groups-main/mods/space-groups
 herdr-app check ~/.config/herdr-app/mods/space-groups
 ```
 
-Then show it in a layout.
-Herdr's own layouts are read-only, so if you are on one of them, run Duplicate layout from the command palette first, or:
+Run the same lines again to update.
+
+If you install it under another folder name, change `MOD` in `groups.js` to match, because the menu and dialogs open as overlays of the mod by that name.
+
+## Turn it on
+
+The mod replaces the Spaces sidebar in a layout of your own.
+Herdr's shipped layouts are read-only, so if you are on one of them, duplicate it first with Duplicate layout in the command palette, or:
 
 ```sh
 herdr-app do layout.clone '{"name":"main","as":"my-layout"}'
 ```
 
-In `~/.config/herdr-app/layouts/<your layout>.json`, change the Spaces block's `"mod"` from `"spaces"` (or a copy of it) to `"space-groups"`:
+That also switches to the copy.
+In `~/.config/herdr-app/layouts/my-layout.json`, set the Spaces block's `"mod"` to `"space-groups"`:
 
 ```json
 { "id": "spaces", "type": "block", "content": { "mod": "space-groups" } }
 ```
 
 The window picks it up within a second.
-To go back, set it to `"spaces"` again.
-To update, copy the folder again.
 
 ## Use
 
-![Space menu](screenshots/menu.png)
+<p align="center">
+  <img src="screenshots/menu.png" width="450" alt="The space menu with Move to group and Remove from group">
+</p>
 
-- Right-click a space for Move to group…, which picks one of that machine's groups or makes a new one from the name you type, and Remove from group.
-- Click a group's header to fold it.
-  Right-click it to rename the group, or delete it, which leaves its spaces in no group.
-- Drag a space onto a space in another group to move it there and to that spot, or onto a group's header to add it to that group.
-- A worktree listed under its checkout goes with its checkout's group.
+| To | Do |
+|---|---|
+| Make a group | Right-click a space, choose **Move to group…**, type a new name and press Enter. |
+| Move a space to a group | **Move to group…** and pick one of that machine's groups, or drag the space onto a space in that group or onto the group's header. |
+| Take a space out | Right-click it and choose **Remove from group**, or drag it onto a space in no group. |
+| Reorder spaces | Drag a space onto another space; it lands at that spot and joins that space's group. |
+| Fold a group | Click its header. |
+| Rename a group | Right-click its header and choose **Rename group**. |
+| Delete a group | Right-click its header and choose **Delete group**; its spaces go back to no group. |
 
-![Move to group](screenshots/move.png)
+A worktree listed under its checkout goes with its checkout's group.
 
-Groups are kept on the computer running the app, in its shared state (`shared.json`, key `space-groups`), so they survive restarts and app updates.
+<p align="center">
+  <img src="screenshots/move.png" width="410" alt="The Move to group dialog">
+</p>
+
+Groups are kept on the computer running the app, in its shared state (`shared.json`, key `space-groups`).
 They hold spaces by id, which includes the machine (`server/sp1f…`).
 A closed space leaves its group once its machine's spaces can be read again, so a machine that is away keeps its groups.
+
+Like Herdr's own sidebar, the mod runs `git` in each space's folder for the repo and branch hints and `hc machine ls` for the machine list.
+It makes no network requests of its own.
+
+## Uninstall
+
+1. In your layout, set the Spaces block's `"mod"` back to `"spaces"`.
+2. Delete `~/.config/herdr-app/mods/space-groups`.
+
+Your groups stay in `shared.json` and come back if you install the mod again.
+
+## Compatibility
+
+- Tested with Herdr app 0.1.9.
+- Standalone: needs no other mod, program or setting.
+- `sidebar.js` and `menu.js` start from Herdr's own `spaces` and `menu` mods, so later changes to Herdr's sidebar reach this one only when it is updated.
 
 ## Adding items to the space menu
 
@@ -71,12 +114,8 @@ setShared("space-groups.menu", {
 - `spaces` shows the item only for those space ids, and `except` hides it for them.
 - `icon` is optional, a path in the app's folder drawn tinted.
 
-## Notes
-
-- If you install it under another folder name, change `MOD` in `groups.js` to match: the menu and dialogs open as overlays of this mod.
-- `sidebar.js` and `menu.js` start from Herdr's own `spaces` and `menu` mods, as Duplicate mod would, so later changes to Herdr's sidebar don't reach this one until it is updated.
-
 ## License
 
 MIT, see [LICENSE](LICENSE).
-Parts adapted from the Herdr app are under the Apache License 2.0, see [NOTICE](NOTICE).
+`sidebar.js` and `menu.js` are adapted from the `spaces` and `menu` mods of the [Herdr app](https://github.com/herdrdev/herdr-app), under the Apache License 2.0; see [NOTICE](NOTICE) and [LICENSE-APACHE](LICENSE-APACHE).
+[RECIPE.md](RECIPE.md) is the brief to build the mod from scratch.
