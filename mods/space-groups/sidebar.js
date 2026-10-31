@@ -2,12 +2,13 @@
 // grouped by machine when more than one is known, and by hand into foldable
 // groups inside each machine. After a space's name, the repo
 // its first terminal is in now, only where unusual: branch, ahead/behind. Agent state lives in the agents list, not here. Click to
-// switch, right-click for its menu, drag to reorder or into another group.
+// switch, right-click for its menu, drag to reorder or into another group; drag a
+// group's header to reorder the groups.
 
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { spaces, machines, panes, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, layout } from "herdr";
-import { MOD, load, groupOf, groupsOn, assign, toggle, prune } from "./groups.js";
+import { MOD, load, groupOf, groupsOn, assign, toggle, reorder, prune } from "./groups.js";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -62,6 +63,7 @@ export default class Sidebar {
     this.shown = new Set(spaces().map((s) => s.id));
     this.born = {};
     this.pressed = null;
+    this.dragged = null;
     this.over = null;
     this.machines = [];
     this.folded = new Set(JSON.parse(localStorage.getItem("machines.folded") ?? "[]"));
@@ -283,7 +285,10 @@ export default class Sidebar {
     const target = this.pressed !== null && this.over === key;
     // Folded over the shown space: the header stands in for its row.
     const holds = g.folded && members.some((r) => r.w.active);
+    const order = () => groupsOn(load(), g.machine).map((o) => o.id);
+    const above = () => order().indexOf(this.dragged) > order().indexOf(g.id);
     return h_flex()
+      .relative()
       .id(`group-${g.id}`)
       .h(26)
       .flex_none()
@@ -297,9 +302,27 @@ export default class Sidebar {
       .cursor_pointer()
       .when(target || holds, (el) => el.bg(t.selected))
       .when(!target && !holds, (el) => el.hover((s) => s.bg(t.hover)))
-      .on_click(() => toggle(g.id))
+      .when(this.dragged === g.id && this.over !== key, (el) => el.opacity(0.5))
+      .when(this.dragged !== null && this.dragged !== g.id && this.over === key, (el) => el.child(
+        div().absolute().left(0).right(0).h(2).bg(t.accent)
+          .when(above(), (line) => line.top(0))
+          .when(!above(), (line) => line.bottom(0)),
+      ))
+      .on_mouse_down("left", () => {
+        this.pressed = null;
+        this.dragged = g.id;
+        this.over = key;
+      })
       .on_mouse_down("right", () => this.menu({ group: g.id }))
       .on_mouse_move((_e, cx) => {
+        if (this.dragged !== null) {
+          const over = order().includes(this.dragged) ? key : null;
+          if (this.over !== over) {
+            this.over = over;
+            cx.notify();
+          }
+          return;
+        }
         const source = spaces()[this.pressed];
         const over = source && !this.pressedTree && (source.machine ?? null) === g.machine ? key : null;
         if (this.pressed !== null && this.over !== over) {
@@ -307,9 +330,16 @@ export default class Sidebar {
           cx.notify();
         }
       })
-      .on_mouse_up("left", () => {
+      .on_mouse_up("left", (_e, cx) => {
+        const dragged = this.dragged;
+        const after = dragged !== null && !above();
+        this.dragged = null;
+        if (this.over !== key) return;
         const source = spaces()[this.pressed];
-        if (source && this.over === key) assign(source.id, g.id);
+        if (dragged === g.id) toggle(g.id);
+        else if (dragged !== null) reorder(dragged, g.id, after);
+        else if (source) assign(source.id, g.id);
+        cx.notify();
       })
       .child(svg("mods/workspace-chrome/folder.svg").size(13).flex_none().text_color(t.dim))
       .when(!collapsed, (el) => el
@@ -370,11 +400,16 @@ export default class Sidebar {
           .when(this.pressed > i, line => line.top(0)),
       ))
       .on_mouse_down("left", () => {
+        this.dragged = null;
         this.pressed = i;
         this.pressedTree = Boolean(tree);
         this.over = i;
       })
       .on_mouse_move((_e, cx) => {
+        if (this.dragged !== null && this.over !== null) {
+          this.over = null;
+          cx.notify();
+        }
         const source = spaces()[this.pressed];
         const over = source && (source.machine ?? null) === (w.machine ?? null) ? i : null;
         if (this.pressed !== null && this.over !== over) {
@@ -439,7 +474,7 @@ export default class Sidebar {
         .child(div().id("space-new").size(26).flex_none().flex().items_center().justify_center().rounded(6).hover(s => s.bg(t.hover).text_color(t.foreground))
           .on_click(() => run("space.new")).child(svg("mods/workspace-chrome/plus.svg").size(14))))
       .child(v_flex().flex_1().min_h(0).px(8).pb(14).overflow_y_scrollbar().mode("always")
-        .on_mouse_up("left", (_e, cx) => { this.pressed = null; cx.notify(); })
+        .on_mouse_up("left", (_e, cx) => { this.pressed = null; this.dragged = null; cx.notify(); })
         .children(this.grouped(t, collapsed)));
   }
 }

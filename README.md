@@ -64,6 +64,7 @@ The window picks it up within a second.
 | Move a space to a group | **Move to group…** and pick one of that machine's groups, or drag the space onto a space in that group or onto the group's header. |
 | Take a space out | Right-click it and choose **Remove from group**, or drag it onto a space in no group. |
 | Reorder spaces | Drag a space onto another space; it lands at that spot and joins that space's group. |
+| Reorder groups | Drag a group's header above or below another group's, or right-click it and choose **Move up** or **Move down**. |
 | Fold a group | Click its header. |
 | Rename a group | Right-click its header and choose **Rename group**. |
 | Delete a group | Right-click its header and choose **Delete group**; its spaces go back to no group. |

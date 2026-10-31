@@ -1,5 +1,5 @@
 // Groups live in shared "space-groups" on the computer running the app:
-// { groups: [{ id, name, machine, folded }], spaces: { <space id>: <group id> } }.
+// { groups: [{ id, name, machine, folded }] in the order shown, spaces: { <space id>: <group id> } }.
 // A space id already carries its machine ("server/s3"; local ones have none), and a
 // group only holds spaces of its own machine.
 
@@ -57,6 +57,24 @@ export function remove(groupId) {
   state.groups = state.groups.filter((g) => g.id !== groupId);
   state.spaces = Object.fromEntries(Object.entries(state.spaces).filter(([, g]) => g !== groupId));
   save(state);
+}
+
+export function reorder(groupId, targetId, after) {
+  const state = load();
+  const g = state.groups.find((g) => g.id === groupId);
+  const target = state.groups.find((g) => g.id === targetId);
+  if (!g || !target || g === target || g.machine !== target.machine) return;
+  state.groups.splice(state.groups.indexOf(g), 1);
+  state.groups.splice(state.groups.indexOf(target) + (after ? 1 : 0), 0, g);
+  save(state);
+}
+
+export function shift(groupId, by) {
+  const state = load();
+  const g = state.groups.find((g) => g.id === groupId);
+  const mine = g ? groupsOn(state, g.machine) : [];
+  const target = mine[mine.indexOf(g) + by];
+  if (target) reorder(groupId, target.id, by > 0);
 }
 
 export function toggle(groupId) {

@@ -1,11 +1,11 @@
 // The menus of a space and of a group. Opened as a popup with props
 // { space, nested } or { group }. ↑/↓ move, Enter runs, Esc closes. An item is
-// [label, command, args]; "worktree", "group.*" and "item" act here instead of running.
+// [label, command, args, disabled]; "worktree", "group.*" and "item" act here instead of running.
 
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { run, props, closeOverlay, openOverlay, theme, keys, spaces, panes, exec, shared } from "herdr";
-import { MOD, load, groupOf, assign, remove } from "./groups.js";
+import { MOD, load, groupOf, groupsOn, assign, remove, shift } from "./groups.js";
 
 // Other mods add to a space's menu through shared "space-groups.menu":
 // { <their name>: [{ label, icon?, spaces?, except?, overlay }] }. `spaces` / `except`
@@ -35,8 +35,13 @@ async function checkout(folder, on) {
 function items(p, git) {
   p = p ?? {};
   if (p.group) {
+    const state = load();
+    const g = state.groups.find((g) => g.id === p.group);
+    const mine = g ? groupsOn(state, g.machine) : [];
     return [
       ["Rename group", "group.rename", { group: p.group }],
+      ["Move up", "group.shift", { group: p.group, by: -1 }, mine[0] === g],
+      ["Move down", "group.shift", { group: p.group, by: 1 }, mine.at(-1) === g],
       ["Delete group", "group.delete", { group: p.group }],
     ];
   }
@@ -54,6 +59,7 @@ function items(p, git) {
 
 function menuIcon([, command, args]) {
   if (command === "item" && typeof args.icon === "string") return args.icon;
+  if (command === "group.shift") return `mods/${MOD}/arrow-${args.by < 0 ? "up" : "down"}.svg`;
   const name = command.endsWith(".close") || command === "group.delete" ? "x" : command.endsWith(".rename") ? "square-pen" : command === "worktree" ? "git-branch" : command === "group.move" ? "folder" : command === "group.leave" ? "minus" : command === "item" ? "folder-plus" : "terminal";
   return `mods/workspace-chrome/${name}.svg`;
 }
@@ -86,7 +92,7 @@ export default class Menu {
 
   choose(i, cx) {
     const it = items(props(), this.git)[i];
-    if (!it) return;
+    if (!it || it[3]) return;
     closeOverlay(props()?.overlay);
     const [, command, args] = it;
     if (command === "worktree") openOverlay({ mod: "worktree", kind: "dialog", ...(args.action === "open" ? { width: 560, height: 480 } : { width: 440, height: 260 }), props: args });
@@ -94,6 +100,7 @@ export default class Menu {
     else if (command === "group.move") openOverlay({ mod: MOD, kind: "dialog", width: 380, props: { role: "move", space: args.space } });
     else if (command === "group.leave") assign(args.space, null);
     else if (command === "group.rename") openOverlay({ mod: MOD, kind: "dialog", width: 380, props: { role: "rename", group: args.group } });
+    else if (command === "group.shift") shift(args.group, args.by);
     else if (command === "group.delete") remove(args.group);
     else run(command, args);
   }
@@ -129,11 +136,11 @@ export default class Menu {
             .rounded(7)
             .items_center()
             .justify_between()
-            .text_color(t.foreground)
+            .text_color(it[3] ? t.dim : t.foreground)
             .when(i === this.at, (el) => el.bg(t.selected))
-            .hover((s) => s.bg(t.hover))
+            .when(!it[3], (el) => el.hover((s) => s.bg(t.hover)))
             .on_click((_e, cx) => this.choose(i, cx))
-            .child(svg(menuIcon(it)).size(14).flex_none().text_color(t.muted))
+            .child(svg(menuIcon(it)).size(14).flex_none().text_color(it[3] ? t.dim : t.muted))
             .child(div().flex_1().child(it[0]))
             .child(div().text_size(11).text_color(t.dim).child(shortcut(it[1], it[2])))),
         ),
