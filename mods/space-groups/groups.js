@@ -85,6 +85,14 @@ export function toggle(groupId) {
   save(state);
 }
 
+export function unfold(groupId) {
+  const state = load();
+  const g = state.groups.find((g) => g.id === groupId);
+  if (!g?.folded) return;
+  g.folded = false;
+  save(state);
+}
+
 export const sameName = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 // A closed space leaves its group. Only once its machine's spaces could be read:

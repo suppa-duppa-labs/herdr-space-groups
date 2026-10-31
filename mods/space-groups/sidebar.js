@@ -8,7 +8,7 @@
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { spaces, machines, panes, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, layout } from "herdr";
-import { MOD, load, groupOf, groupsOn, assign, toggle, reorder, prune } from "./groups.js";
+import { MOD, load, groupOf, groupsOn, assign, toggle, unfold, reorder, prune } from "./groups.js";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -66,6 +66,8 @@ export default class Sidebar {
     this.dragged = null;
     this.over = null;
     this.machines = [];
+    this.shownSpace = spaces().find((s) => s.active)?.id ?? null;
+    this.arrived = null;
     this.folded = new Set(JSON.parse(localStorage.getItem("machines.folded") ?? "[]"));
     this.refreshMachines(cx);
     cx.timer.every(15000, cx => this.refreshMachines(cx));
@@ -274,6 +276,12 @@ export default class Sidebar {
     for (const r of rows) r.tree && blocks.length ? blocks.at(-1).push(r) : blocks.push([r]);
     const draw = (r, group) => (collapsed ? this.compact(r, t) : this.row(r, t, group));
     const inside = (g) => blocks.filter((b) => (groupOf(state, b[0].w)?.id ?? null) === (g?.id ?? null)).flat();
+    for (const g of groupsOn(state, machine)) {
+      if (g.folded && inside(g).some((r) => r.w.id === this.arrived)) {
+        unfold(g.id);
+        g.folded = false;
+      }
+    }
     return [
       ...groupsOn(state, machine).flatMap((g) => [this.groupHead(g, inside(g), t, collapsed), ...(g.folded ? [] : inside(g).map((r) => draw(r, g)))]),
       ...inside(null).map((r) => draw(r, null)),
@@ -458,6 +466,9 @@ export default class Sidebar {
     const collapsed = narrow();
     const palette = ["ansi6", "ansi3", "ansi4", "ansi5", "ansi2", "ansi1"];
     const sp = spaces();
+    const active = sp.find((s) => s.active)?.id ?? null;
+    this.arrived = active !== this.shownSpace ? active : null;
+    this.shownSpace = active;
     const ids = new Set(sp.map(p => p.id));
     const kept = Object.fromEntries(Object.entries(shared("space.colors") ?? {}).filter(([id]) => ids.has(id)));
     let changed = Object.keys(kept).length !== Object.keys(shared("space.colors") ?? {}).length;
