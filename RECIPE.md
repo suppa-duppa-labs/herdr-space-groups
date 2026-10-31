@@ -17,6 +17,8 @@ Everything else is Herdr's own Spaces sidebar.
 **How it behaves:**
 
 - Click a space to switch to it; click a group header to fold or unfold it.
+- When the shown space changes, by any route (sidebar, agents list, command palette, a notification, keys, another mod), to one in a folded group, that group unfolds and stays unfolded.
+  Folding the group that holds the shown space keeps it folded until the shown space changes into it again.
 - Right-click a space: Rename, items other mods added, New worktree, Open worktree, Remove worktree (for a worktree), then Move to group… and Remove from group (only when in one), then Close.
   A worktree row nested under its checkout has no group items: it goes with its checkout's group.
 - Move to group… opens a 380px dialog titled "Move <space> to a group": a Group field over the machine's groups filtered by what is typed, the current one checked, and "New group “<text>”" last when no group has that name.
@@ -51,5 +53,6 @@ Everything else is Herdr's own Spaces sidebar.
 - A layout whose spaces block uses `space-groups` shows group headers inside each machine section, ungrouped spaces below, and the shipped rows unchanged.
 - Move to group… with a new name creates the group and moves the space; Remove from group puts it back below.
 - Folding survives a restart; deleting a group leaves its spaces ungrouped.
+- Switching to a space in a folded group from outside the sidebar unfolds that group.
 - Dragging a space onto another group's row or header moves it into that group.
 - Dragging a group header, or Move up / Move down, reorders the machine's groups, and the order survives a restart.
