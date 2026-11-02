@@ -1,10 +1,10 @@
-// Move a space to a group (one of its machine's, or a new one by name), and rename
-// a group. Enter picks, ↑/↓ move, Esc closes.
+// Move a space or a group to a group (one of its machine's, or a new one by name),
+// and name a group, renaming it or making one inside another. Enter picks, ↑/↓ move, Esc closes.
 
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { props, closeOverlay, theme, spaces } from "herdr";
-import { load, groupOf, groupsOn, assign, create, rename, sameName } from "./groups.js";
+import { load, groupOf, groupsOn, tree, within, path, assign, create, rename, nest, unfold, sameName } from "./groups.js";
 
 function frame(t, title, handle, onKey, ...children) {
   return v_flex().id("dialog").track_focus(handle).on_key_down(onKey)
@@ -29,29 +29,41 @@ export class MoveDialog {
     this.handle = cx.focus_handle();
   }
 
-  space() {
-    return spaces().find((s) => s.id === props().space);
+  subject(state) {
+    const p = props();
+    if (p.group) {
+      const g = state.groups.find((g) => g.id === p.group);
+      return g && { name: g.name, machine: g.machine, current: g.parent, skip: within(state, g.id) };
+    }
+    const space = spaces().find((s) => s.id === p.space);
+    return space && { name: space.name, machine: space.machine ?? null, current: groupOf(state, space)?.id ?? null, skip: new Set() };
   }
 
   choices() {
-    const space = this.space();
-    if (!space) return [];
+    const state = load();
+    const it = this.subject(state);
+    if (!it) return [];
     const name = this.text.trim();
-    const groups = groupsOn(load(), space.machine).filter((g) => g.name.toLowerCase().includes(name.toLowerCase()));
-    return [...groups, ...(name && !groups.some((g) => sameName(g.name, name)) ? [{ name, fresh: true }] : [])];
+    const has = (label) => label.toLowerCase().includes(name.toLowerCase());
+    const groups = tree(state, it.machine).map(({ g }) => ({ id: g.id, label: path(state, g) }))
+      .filter((c) => !it.skip.has(c.id) && has(c.label));
+    const top = props().group && it.current && has("Top level") ? [{ top: true }] : [];
+    const fresh = name && !groupsOn(state, it.machine).some((g) => sameName(g.name, name)) ? [{ name, fresh: true }] : [];
+    return [...top, ...groups, ...fresh];
   }
 
   pick(choice) {
-    const space = this.space();
-    if (!choice || !space) return;
+    const it = this.subject(load());
+    if (!choice || !it) return;
     closeOverlay(props().overlay);
-    assign(space.id, choice.fresh ? create(choice.name, space.machine) : choice.id);
+    const to = choice.top ? null : choice.fresh ? create(choice.name, it.machine) : choice.id;
+    if (props().group) nest(props().group, to);
+    else assign(props().space, to);
   }
 
   render() {
     const t = theme();
-    const space = this.space();
-    const current = space && groupOf(load(), space);
+    const it = this.subject(load());
     const list = this.choices();
     this.at = Math.min(this.at, Math.max(0, list.length - 1));
     const row = (c, i) => h_flex().id(`choice-${i}`).h(32).px(10).gap(9).items_center().rounded(7).cursor_pointer()
@@ -59,8 +71,8 @@ export class MoveDialog {
       .hover((s) => s.bg(t.hover))
       .on_click(() => this.pick(c))
       .child(svg(`mods/workspace-chrome/${c.fresh ? "folder-plus" : "folder"}.svg`).size(14).flex_none().text_color(t.muted))
-      .child(div().flex_1().truncate().child(c.fresh ? `New group “${c.name}”` : c.name))
-      .when(!c.fresh && c.id === current?.id, (el) => el.child(svg("mods/workspace-chrome/check.svg").size(14).flex_none().text_color(t.dim)));
+      .child(div().flex_1().truncate().child(c.fresh ? `New group “${c.name}”` : c.top ? "Top level" : c.label))
+      .when(!c.fresh && !c.top && c.id === it?.current, (el) => el.child(svg("mods/workspace-chrome/check.svg").size(14).flex_none().text_color(t.dim)));
     const onKey = (e, cx) => {
       if (e.key === "escape") closeOverlay(props().overlay);
       else if (e.key === "down" && list.length) this.at = (this.at + 1) % list.length;
@@ -69,16 +81,16 @@ export class MoveDialog {
       cx.stop_propagation();
       cx.notify();
     };
-    return frame(t, space ? `Move ${space.name} to a group` : "Move to a group", this.handle, onKey,
+    return frame(t, it ? `Move ${it.name} to a group` : "Move to a group", this.handle, onKey,
       field(t, this.input),
       ...(list.length ? [v_flex().h(Math.min(260, list.length * 32)).flex_none().overflow_y_scrollbar().children(list.map(row))] : []));
   }
 }
 
-export class RenameDialog {
+export class NameDialog {
   init(_props, cx) {
-    this.text = this.group()?.name ?? "";
-    this.input = InputState.new({ value: this.text });
+    this.text = props().group ? this.group()?.name ?? "" : "";
+    this.input = InputState.new({ value: this.text, placeholder: "Group" });
     if (this.text) this.input.set_selected_range({ start: 0, end: this.text.length });
     this.input.on("change", (_e, cx) => { this.text = this.input.value(); cx.notify(); });
     this.input.on("submit", () => this.save());
@@ -88,19 +100,22 @@ export class RenameDialog {
   }
 
   group() {
-    return load().groups.find((g) => g.id === props().group);
+    return load().groups.find((g) => g.id === (props().group ?? props().parent));
   }
 
   valid() {
     const g = this.group();
     const name = this.text.trim();
-    return Boolean(g && name) && !groupsOn(load(), g.machine).some((o) => o.id !== g.id && sameName(o.name, name));
+    return Boolean(g && name) && !groupsOn(load(), g.machine).some((o) => o.id !== props().group && sameName(o.name, name));
   }
 
   save() {
     if (!this.valid()) return;
     closeOverlay(props().overlay);
-    rename(props().group, this.text.trim());
+    const g = this.group();
+    if (props().group) return rename(g.id, this.text.trim());
+    create(this.text.trim(), g.machine, g.id);
+    unfold(g.id);
   }
 
   render() {
@@ -117,10 +132,11 @@ export class RenameDialog {
       closeOverlay(props().overlay);
       cx.stop_propagation();
     };
-    return frame(t, "Rename group", this.handle, onKey,
+    const renaming = Boolean(props().group);
+    return frame(t, renaming ? "Rename group" : `Add Sub Group to ${this.group()?.name ?? "a group"}`, this.handle, onKey,
       field(t, this.input),
       h_flex().pt(6).gap(8).justify_end()
         .child(button("rename-cancel", "Cancel", false, () => closeOverlay(props().overlay)))
-        .child(button("rename-save", "Save", true, () => this.save())));
+        .child(button("rename-save", renaming ? "Save" : "Create", true, () => this.save())));
   }
 }

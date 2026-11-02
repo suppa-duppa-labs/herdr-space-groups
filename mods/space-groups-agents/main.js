@@ -28,12 +28,26 @@ function toggleSidebar() {
 
 const MOD = "space-groups-agents";
 
-// The groups the space-groups mod keeps; none when it isn't installed.
+// The groups the space-groups mod keeps, each machine's depth first as its sidebar
+// shows them, named by their path; none when it isn't installed.
 function folders() {
   const raw = shared("space-groups") ?? {};
   const list = (Array.isArray(raw.groups) ? raw.groups : []).filter((g) => typeof g?.id === "string" && typeof g?.name === "string");
   const machine = (g) => g.machine ?? null;
-  const ordered = [...new Set([null, ...list.map(machine).filter(Boolean).sort()])].flatMap((m) => list.filter((g) => machine(g) === m));
+  const byId = new Map(list.map((g) => [g.id, g]));
+  const parentOf = (g) => {
+    const p = byId.get(g.parent);
+    return p && machine(p) === machine(g) ? p : null;
+  };
+  const placed = new Set();
+  const walk = (m, parent, names) => list
+    .filter((g) => machine(g) === m && !placed.has(g.id) && (parentOf(g)?.id ?? null) === parent)
+    .flatMap((g) => {
+      placed.add(g.id);
+      const label = [...names, g.name];
+      return [{ ...g, label: label.join(" / ") }, ...walk(m, g.id, label)];
+    });
+  const ordered = [...new Set([null, ...list.map(machine).filter(Boolean).sort()])].flatMap((m) => walk(m, null, []));
   const of = new Map(spaces().map((s) => {
     const g = ordered.find((g) => g.id === raw.spaces?.[s.id] && machine(g) === (s.machine ?? null));
     return [s.id, g ?? null];
@@ -381,7 +395,7 @@ export default class Agents extends View {
       const r = rankOf(a) || RANK.idle;
       const f = folderOf(a);
       const id = byPriority ? `sec-${r}` : byFolder ? `fd-${f?.id ?? ""}` : `sp-${a.space}`;
-      const label = byPriority ? SECTION[r] : byFolder ? f?.name ?? "No folder" : a.space_name || "";
+      const label = byPriority ? SECTION[r] : byFolder ? f?.label ?? "No folder" : a.space_name || "";
       if (groups.at(-1)?.id === id) groups.at(-1).members.push(a);
       else groups.push({ id, label, status: byPriority ? SECTION_STATUS[r] : null, members: [a], bare: byFolder && !anyFolder });
     }

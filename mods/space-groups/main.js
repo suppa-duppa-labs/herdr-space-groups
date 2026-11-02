@@ -5,9 +5,9 @@ import { View } from "gpui-kit";
 import { props } from "herdr";
 import Sidebar from "./sidebar.js";
 import Menu from "./menu.js";
-import { MoveDialog, RenameDialog } from "./dialogs.js";
+import { MoveDialog, NameDialog } from "./dialogs.js";
 
-const ROLES = { menu: Menu, move: MoveDialog, rename: RenameDialog };
+const ROLES = { menu: Menu, move: MoveDialog, name: NameDialog };
 
 export default class SpaceGroups extends View {
   init(initial, cx) {

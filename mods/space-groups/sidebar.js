@@ -3,12 +3,12 @@
 // groups inside each machine. After a space's name, the repo
 // its first terminal is in now, only where unusual: branch, ahead/behind. Agent state lives in the agents list, not here. Click to
 // switch, right-click for its menu, drag to reorder or into another group; drag a
-// group's header to reorder the groups.
+// group's header to reorder the groups or put one inside another.
 
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { spaces, machines, panes, run, openOverlay, exec, hc, theme, shared, setShared, watchFolder, window, layout } from "herdr";
-import { MOD, load, groupOf, groupsOn, assign, toggle, unfold, reorder, prune } from "./groups.js";
+import { MOD, load, groupOf, childrenOf, tree, within, assign, toggle, unfold, reorder, prune } from "./groups.js";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -65,6 +65,7 @@ export default class Sidebar {
     this.pressed = null;
     this.dragged = null;
     this.over = null;
+    this.zone = null;
     this.machines = [];
     this.shownSpace = spaces().find((s) => s.active)?.id ?? null;
     this.arrived = null;
@@ -267,40 +268,55 @@ export default class Sidebar {
     });
   }
 
-  // A machine's rows: its groups first, each a header and, unless folded, its spaces
-  // (a worktree stays under its checkout's row, in that row's group), then the
-  // spaces in no group.
+  // A machine's rows: its groups first, each a header and, unless folded, the groups
+  // inside it and then its spaces (a worktree stays under its checkout's row, in that
+  // row's group), then the spaces in no group.
   section(rows, machine, t, collapsed) {
     const state = load();
     const blocks = [];
     for (const r of rows) r.tree && blocks.length ? blocks.at(-1).push(r) : blocks.push([r]);
-    const draw = (r, group) => (collapsed ? this.compact(r, t) : this.row(r, t, group));
+    const draw = (r, group, depth) => (collapsed ? this.compact(r, t) : this.row(r, t, group, depth));
     const inside = (g) => blocks.filter((b) => (groupOf(state, b[0].w)?.id ?? null) === (g?.id ?? null)).flat();
-    for (const g of groupsOn(state, machine)) {
-      if (g.folded && inside(g).some((r) => r.w.id === this.arrived)) {
+    const deep = (g) => [...within(state, g.id)].flatMap((id) => inside(state.groups.find((o) => o.id === id)));
+    for (const { g } of tree(state, machine)) {
+      if (g.folded && deep(g).some((r) => r.w.id === this.arrived)) {
         unfold(g.id);
         g.folded = false;
       }
     }
-    return [
-      ...groupsOn(state, machine).flatMap((g) => [this.groupHead(g, inside(g), t, collapsed), ...(g.folded ? [] : inside(g).map((r) => draw(r, g)))]),
-      ...inside(null).map((r) => draw(r, null)),
-    ];
+    const level = (parent, depth) => childrenOf(state, machine, parent).flatMap((g) => [
+      this.groupHead(g, deep(g), t, collapsed, depth),
+      ...(g.folded ? [] : [...level(g.id, depth + 1), ...inside(g).map((r) => draw(r, g, depth + 1))]),
+    ]);
+    return [...level(null, 0), ...inside(null).map((r) => draw(r, null, 0))];
   }
 
-  groupHead(g, members, t, collapsed) {
+  // Where a dragged header lands on this one: its top and bottom edges put it beside
+  // as a sibling, the middle puts it inside.
+  zoneAt(e) {
+    const y = e?.local_position?.y;
+    const h = e?.bounds?.height ?? 26;
+    return y == null ? "into" : y < h / 4 ? "above" : y > (h * 3) / 4 ? "below" : "into";
+  }
+
+  groupHead(g, members, t, collapsed, depth) {
     const key = `group:${g.id}`;
     const target = this.pressed !== null && this.over === key;
     // Folded over the shown space: the header stands in for its row.
     const holds = g.folded && members.some((r) => r.w.active);
-    const order = () => groupsOn(load(), g.machine).map((o) => o.id);
-    const above = () => order().indexOf(this.dragged) > order().indexOf(g.id);
+    const fits = () => {
+      const state = load();
+      const d = state.groups.find((o) => o.id === this.dragged);
+      return Boolean(d) && d.machine === g.machine && !within(state, d.id).has(g.id);
+    };
+    const landing = this.dragged !== null && this.dragged !== g.id && this.over === key;
     return h_flex()
       .relative()
       .id(`group-${g.id}`)
       .h(26)
       .flex_none()
       .px(collapsed ? 0 : 8)
+      .when(!collapsed && depth > 0, (el) => el.ml(12 * depth))
       .gap(7)
       .items_center()
       .when(collapsed, (el) => el.justify_center())
@@ -308,25 +324,28 @@ export default class Sidebar {
       .text_size(12)
       .text_color(t.muted)
       .cursor_pointer()
-      .when(target || holds, (el) => el.bg(t.selected))
-      .when(!target && !holds, (el) => el.hover((s) => s.bg(t.hover)))
+      .when(target || holds || (landing && this.zone === "into"), (el) => el.bg(t.selected))
+      .when(!target && !holds && !landing, (el) => el.hover((s) => s.bg(t.hover)))
       .when(this.dragged === g.id && this.over !== key, (el) => el.opacity(0.5))
-      .when(this.dragged !== null && this.dragged !== g.id && this.over === key, (el) => el.child(
+      .when(landing && this.zone !== "into", (el) => el.child(
         div().absolute().left(0).right(0).h(2).bg(t.accent)
-          .when(above(), (line) => line.top(0))
-          .when(!above(), (line) => line.bottom(0)),
+          .when(this.zone === "above", (line) => line.top(0))
+          .when(this.zone === "below", (line) => line.bottom(0)),
       ))
       .on_mouse_down("left", () => {
         this.pressed = null;
         this.dragged = g.id;
         this.over = key;
+        this.zone = null;
       })
       .on_mouse_down("right", () => this.menu({ group: g.id }))
-      .on_mouse_move((_e, cx) => {
+      .on_mouse_move((e, cx) => {
         if (this.dragged !== null) {
-          const over = order().includes(this.dragged) ? key : null;
-          if (this.over !== over) {
+          const over = this.dragged === g.id || fits() ? key : null;
+          const zone = over && this.dragged !== g.id ? this.zoneAt(e) : null;
+          if (this.over !== over || this.zone !== zone) {
             this.over = over;
+            this.zone = zone;
             cx.notify();
           }
           return;
@@ -338,14 +357,18 @@ export default class Sidebar {
           cx.notify();
         }
       })
-      .on_mouse_up("left", (_e, cx) => {
+      .on_mouse_up("left", (e, cx) => {
         const dragged = this.dragged;
-        const after = dragged !== null && !above();
+        const zone = this.zone ?? this.zoneAt(e);
         this.dragged = null;
+        this.zone = null;
         if (this.over !== key) return;
         const source = spaces()[this.pressed];
         if (dragged === g.id) toggle(g.id);
-        else if (dragged !== null) reorder(dragged, g.id, after);
+        else if (dragged !== null) {
+          reorder(dragged, g.id, zone);
+          if (zone === "into") unfold(g.id);
+        }
         else if (source) assign(source.id, g.id);
         cx.notify();
       })
@@ -385,7 +408,7 @@ export default class Sidebar {
       .when(g.behind > 0, (el) => el.child(div().flex_none().text_color(t.ansi1).child(`\u2193${g.behind}`)));
   }
 
-  row({ w, i, g, tree }, t, group) {
+  row({ w, i, g, tree }, t, group, depth) {
     const on = w.active;
     const colors = shared("space.colors") ?? {};
     const color = colors[w.id] ?? "ansi6";
@@ -398,7 +421,7 @@ export default class Sidebar {
       .flex_none()
       .justify_center()
       .rounded(8)
-      .when(Boolean(group), (el) => el.ml(12))
+      .when(depth > 0, (el) => el.ml(12 * depth))
       .when(on, (el) => el.bg(t.selected))
       .when(!on, (el) => el.hover((s) => s.bg(t.hover)))
       .when(this.pressed === i && this.over !== i, (el) => el.opacity(0.5))
@@ -485,7 +508,7 @@ export default class Sidebar {
         .child(div().id("space-new").size(26).flex_none().flex().items_center().justify_center().rounded(6).hover(s => s.bg(t.hover).text_color(t.foreground))
           .on_click(() => run("space.new")).child(svg("mods/workspace-chrome/plus.svg").size(14))))
       .child(v_flex().flex_1().min_h(0).px(8).pb(14).overflow_y_scrollbar().mode("always")
-        .on_mouse_up("left", (_e, cx) => { this.pressed = null; this.dragged = null; cx.notify(); })
+        .on_mouse_up("left", (_e, cx) => { this.pressed = null; this.dragged = null; this.zone = null; cx.notify(); })
         .children(this.grouped(t, collapsed)));
   }
 }

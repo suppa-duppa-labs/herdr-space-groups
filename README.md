@@ -53,6 +53,7 @@ To also group the Agents list by these groups, set the Agents block's `"mod"` to
 | Make a group or move a space into one | Right-click the space and choose **Move to group…**, then pick a group or type a new name. |
 | Move or reorder spaces | Drag a space onto another space or onto a group's header. |
 | Reorder groups | Drag a group's header above or below another, or right-click it and choose **Move up** or **Move down**. |
+| Put a group inside another | Drag its header onto the middle of the other group's header, or right-click it and choose **Move to group…**. Right-click a group and choose **Add Sub Group…** to start one there. |
 | Fold, rename or delete a group | Click its header to fold it, or right-click it for **Rename group** and **Delete group**. |
 | See agents by group | In the Agents list, open the sort menu and choose **Grouped by folder**. |
 
