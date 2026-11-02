@@ -5,11 +5,7 @@ Put your spaces in groups you name yourself, fold the ones you are not working o
 Groups are kept per machine and survive restarts.
 
 <p align="center">
-  <img src=".github/hero/space-groups.gif" width="496" alt="A space dragged into a group, then an agent click unfolding its folded group">
-</p>
-
-<p align="center">
-  <img src="preview.png" width="268" alt="Spaces sidebar with groups">
+  <img src=".github/hero/space-groups.gif" width="496" alt="A new group made from the space menu, a space dragged into a group, and an agent click unfolding its folded group">
 </p>
 
 ## Install

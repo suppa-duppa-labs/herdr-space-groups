@@ -1,4 +1,4 @@
-import { ChevronDown, Folder, Plus, Terminal, X } from 'lucide-react'
+import { ChevronDown, Folder, FolderPlus, Plus, SquarePen, Terminal, X } from 'lucide-react'
 import '@fontsource-variable/geist'
 import '@fontsource-variable/jetbrains-mono'
 import { Stage, type Act } from '../../kit'
@@ -17,9 +17,12 @@ const SPACES: Record<string, Space> = {
   logs: { id: 'logs', name: 'logs', color: MARK.violet },
 }
 
+type Point = { x: number; y: number }
+
 type S = {
   product: string[]
   platformOpen: boolean
+  writing: string[] | null
   loose: string[]
   active: string
   focused: string | null
@@ -27,35 +30,48 @@ type S = {
   over: string | null
   leaving: string | null
   landing: string | null
+  menu: Point
+  menuOpen: boolean
+  menuAt: string | null
+  dialog: boolean
+  query: string
   hidden: boolean
 }
 
 const initial: S = {
   product: ['web', 'design'],
   platformOpen: false,
-  loose: ['mobile', 'notes', 'logs'],
+  writing: null,
+  loose: ['notes', 'mobile', 'logs'],
   active: 'web',
   focused: null,
   pressed: null,
   over: null,
   leaving: null,
   landing: null,
+  menu: { x: 0, y: 0 },
+  menuOpen: false,
+  menuAt: null,
+  dialog: false,
+  query: '',
   hidden: false,
 }
 
 const poster: S = {
   ...initial,
   product: ['web', 'design', 'mobile'],
-  loose: ['notes', 'logs'],
+  writing: ['notes'],
+  loose: ['logs'],
   platformOpen: true,
   active: 'api',
   focused: 'api',
 }
 
 const PLATFORM = ['api', 'infra']
-const ORDER = ['product', 'platform', ...Object.keys(SPACES)]
+const ORDER = ['product', 'platform', 'writing', ...Object.keys(SPACES)]
 const GROUP = 28
 const ROW = 30
+const HOME = { x: 216, y: 330 }
 
 type Entry = { key: string; kind: 'group' | 'space'; y: number; shown: boolean; grouped: boolean }
 
@@ -76,20 +92,26 @@ function layout(s: S): Entry[] {
   const header = y - GROUP
   if (s.platformOpen) PLATFORM.forEach((id) => space(id, true))
   else PLATFORM.forEach((id, i) => out.push({ key: id, kind: 'space', y: header + GROUP + i * ROW, shown: false, grouped: true }))
+  if (s.writing) {
+    group('writing')
+    s.writing.forEach((id) => space(id, true))
+  } else out.push({ key: 'writing', kind: 'group', y, shown: false, grouped: false })
   s.loose.forEach((id) => space(id, false))
   return out.sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key))
 }
+
+const GROUPS: Record<string, string> = { product: 'Product', platform: 'Platform', writing: 'Writing' }
 
 function Chevron({ open }: { open: boolean }) {
   return <ChevronDown size={12} strokeWidth={2} className="sg-chev" style={{ rotate: open ? '0deg' : '-90deg' }} />
 }
 
-function GroupHead({ id, name, open, s }: { id: string; name: string; open: boolean; s: S }) {
+function GroupHead({ id, open, s }: { id: string; open: boolean; s: S }) {
   const holds = !open && id === 'platform' && PLATFORM.includes(s.active)
   return (
     <div className="sg-group" data-target={`group-${id}`} data-on={s.over === id || holds || undefined}>
       <Folder size={14} strokeWidth={2} className="sg-dim" />
-      <span className="sg-group-name">{name}</span>
+      <span className="sg-group-name">{GROUPS[id]}</span>
       <Chevron open={open} />
     </div>
   )
@@ -156,12 +178,87 @@ function Pane({ id }: { id: string }) {
   )
 }
 
+function Menu({ at, hover }: { at: Point; hover: string | null }) {
+  const item = (id: string, icon: React.ReactNode, label: string, hint?: string) => (
+    <div className="sg-mi" data-target={`menu-${id}`} data-on={hover === id || undefined}>
+      {icon}
+      <span className="sg-grow">{label}</span>
+      {hint && <span className="sg-hint">{hint}</span>}
+    </div>
+  )
+  return (
+    <div className="sg-menu" style={{ left: at.x, top: at.y }}>
+      {item('rename', <SquarePen size={14} strokeWidth={2} className="sg-mi-icon" />, 'Rename', 'shift-f2')}
+      <div className="sg-sep" />
+      {item('move', <Folder size={14} strokeWidth={2} className="sg-mi-icon" />, 'Move to group…')}
+      <div className="sg-sep" />
+      {item('close', <X size={14} strokeWidth={2} className="sg-mi-icon" />, 'Close')}
+    </div>
+  )
+}
+
+function MoveDialog({ query }: { query: string }) {
+  const name = query.trim()
+  const groups = ['Product', 'Platform'].filter((g) => g.toLowerCase().includes(name.toLowerCase()))
+  const choices = [...groups.map((g) => ({ key: g, fresh: false, label: g })), ...(name ? [{ key: 'new', fresh: true, label: `New group “${name}”` }] : [])]
+  return (
+    <div className="sg-dialog">
+      <div className="sg-dialog-head">
+        <span className="sg-dialog-title">Move notes to a group</span>
+        <span className="sg-hint">Esc</span>
+      </div>
+      <div className="sg-field">
+        {query ? <span>{query}</span> : <span className="sg-placeholder">Group</span>}
+        <span className="sg-field-caret" data-empty={!query || undefined} />
+      </div>
+      <div className="sg-choices">
+        {choices.map((c, i) => (
+          <div key={c.key} className="sg-choice" data-target={`choice-${c.key}`} data-on={i === 0 || undefined}>
+            {c.fresh ? <FolderPlus size={14} strokeWidth={2} className="sg-mi-icon" /> : <Folder size={14} strokeWidth={2} className="sg-mi-icon" />}
+            <span>{c.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 async function script(a: Act<S>) {
   a.mark('open')
   await a.wait(500)
+  const notes = a.rect('space-notes')
+  const press = { x: notes.x + notes.width * 0.42, y: notes.y + notes.height / 2 }
+  await a.move(press)
+  await a.click(undefined, { right: true })
+  a.mark('menu')
+  await a.set({ menu: { x: press.x + 2, y: press.y + 2 }, menuOpen: true })
+  await a.wait(350)
+  const move = a.rect('menu-move')
+  await a.move({ x: move.x + move.width * 0.45, y: move.y + move.height / 2 }, { onMove: (at) => {
+    const over = at.y >= move.y && at.y <= move.y + move.height ? 'move' : null
+    a.put({ menuAt: over })
+  } })
+  await a.set({ menuAt: 'move' })
+  await a.wait(150)
+  await a.click()
+  a.mark('dialog')
+  await a.set({ menuOpen: false, dialog: true })
+  await a.wait(450)
+  await a.type('query', 'Writing', { interval: 70 })
+  await a.wait(350)
+  const fresh = a.rect('choice-new')
+  await a.move({ x: fresh.x + fresh.width * 0.4, y: fresh.y + fresh.height / 2 })
+  await a.wait(100)
+  await a.click()
+  a.mark('created')
+  await a.set({ dialog: false, leaving: 'notes' })
+  await a.wait(100)
+  await a.set({ leaving: null, landing: 'notes', writing: ['notes'], loose: ['mobile', 'logs'] })
+  await a.wait(650)
+  await a.set({ landing: null })
+  await a.wait(300)
   const row = a.rect('space-mobile')
-  const from = { x: row.x + row.width * 0.62, y: row.y + row.height / 2 }
-  await a.move(from)
+  await a.move({ x: row.x + row.width * 0.62, y: row.y + row.height / 2 })
   await a.wait(150)
   a.mark('drag')
   const head = a.rect('group-product')
@@ -169,12 +266,12 @@ async function script(a: Act<S>) {
   await a.drag(to, (at) => {
     const over = at.y >= head.y && at.y <= head.y + head.height ? 'product' : null
     a.put({ pressed: 'mobile', over })
-  }, { duration: 1100 })
+  }, { duration: 1200 })
   a.mark('drop')
   await a.set({ leaving: 'mobile' })
   await a.wait(100)
-  await a.set({ pressed: null, over: null, leaving: null, landing: 'mobile', product: ['web', 'design', 'mobile'], loose: ['notes', 'logs'] })
-  await a.wait(700)
+  await a.set({ pressed: null, over: null, leaving: null, landing: 'mobile', product: ['web', 'design', 'mobile'], loose: ['logs'] })
+  await a.wait(650)
   await a.set({ landing: null })
   await a.wait(100)
   const agent = a.rect('agent-api')
@@ -184,7 +281,7 @@ async function script(a: Act<S>) {
   a.mark('unfold')
   await a.set({ focused: 'api', active: 'api', platformOpen: true })
   await a.wait(500)
-  await a.move({ x: 392, y: 404 }, { duration: 900 })
+  await a.move({ x: 392, y: 430 }, { duration: 900 })
   await a.wait(1800)
   const plat = a.rect('group-platform')
   await a.move({ x: plat.x + plat.width * 0.62, y: plat.y + plat.height / 2 })
@@ -197,7 +294,7 @@ async function script(a: Act<S>) {
   await a.set({ hidden: true })
   await a.wait(280)
   await a.snap({ ...initial, hidden: true })
-  a.place({ x: 216, y: 301 })
+  a.place(HOME)
   await a.set({ hidden: false })
   await a.wait(300)
 }
@@ -206,69 +303,77 @@ export default function SpaceGroupsHero() {
   return (
     <Stage
       width={496}
-      height={512}
+      height={546}
       initial={initial}
       poster={poster}
       script={script}
       play="loop"
       theme="dark"
-      cursor={{ at: { x: 216, y: 301 } }}
+      cursor={{ at: HOME }}
       className="sg"
     >
       {(s) => {
         const entries = layout(s)
         return (
-          <div className="sg-app" data-hidden={s.hidden || undefined}>
-            <div className="sg-sidebar">
-              <div className="sg-spaces">
-                <div className="sg-head">
-                  <span>Spaces</span>
-                  <span className="sg-icon-btn"><Plus size={14} strokeWidth={2} /></span>
+          <>
+            <div className="sg-app" data-hidden={s.hidden || undefined}>
+              <div className="sg-sidebar">
+                <div className="sg-spaces">
+                  <div className="sg-head">
+                    <span>Spaces</span>
+                    <span className="sg-icon-btn"><Plus size={14} strokeWidth={2} /></span>
+                  </div>
+                  <div className="sg-list">
+                    {entries.map((e) => (
+                      <div key={e.key} className="sg-slot" data-shown={e.shown || undefined} data-leaving={s.leaving === e.key || undefined} data-landing={s.landing === e.key || undefined} style={{ transform: `translateY(${e.y}px)` }}>
+                        {e.kind === 'group'
+                          ? <GroupHead id={e.key} open={e.key !== 'platform' || s.platformOpen} s={s} />
+                          : <SpaceRow sp={SPACES[e.key]} s={s} grouped={e.grouped} />}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="sg-list">
-                  {entries.map((e) => (
-                    <div key={e.key} className="sg-slot" data-shown={e.shown || undefined} data-leaving={s.leaving === e.key || undefined} data-landing={s.landing === e.key || undefined} style={{ transform: `translateY(${e.y}px)` }}>
-                      {e.kind === 'group'
-                        ? <GroupHead id={e.key} name={e.key === 'product' ? 'Product' : 'Platform'} open={e.key === 'product' || s.platformOpen} s={s} />
-                        : <SpaceRow sp={SPACES[e.key]} s={s} grouped={e.grouped} />}
+                <div className="sg-agents">
+                  <div className="sg-agents-head">
+                    <span>Agents</span>
+                    <Folder size={14} strokeWidth={2} />
+                  </div>
+                  <div className="sg-agents-list">
+                    <div className="sg-agent-group">Product</div>
+                    <div className="sg-agent">
+                      <Bot />
+                      <span className="sg-agent-name">web</span>
+                      <span className="sg-agent-more">· checkout</span>
+                      <span className="sg-grow" />
+                      <span className="sg-working"><Spinner /></span>
                     </div>
-                  ))}
-                </div>
-              </div>
-              <div className="sg-agents">
-                <div className="sg-agents-head">
-                  <span>Agents</span>
-                  <Folder size={14} strokeWidth={2} />
-                </div>
-                <div className="sg-agents-list">
-                  <div className="sg-agent-group">Product</div>
-                  <div className="sg-agent">
-                    <Bot />
-                    <span className="sg-agent-name">web</span>
-                    <span className="sg-agent-more">· checkout</span>
-                    <span className="sg-grow" />
-                    <span className="sg-working"><Spinner /></span>
-                  </div>
-                  <div className="sg-agent-group">Platform</div>
-                  <div className="sg-agent" data-target="agent-api" data-on={s.focused === 'api' || undefined}>
-                    <Bot />
-                    <span className="sg-agent-name">api</span>
-                    <span className="sg-agent-more">· migrations</span>
-                    <span className="sg-grow" />
-                    <span className="sg-needs">Needs you</span>
+                    <div className="sg-agent-group">Platform</div>
+                    <div className="sg-agent" data-target="agent-api" data-on={s.focused === 'api' || undefined}>
+                      <Bot />
+                      <span className="sg-agent-name">api</span>
+                      <span className="sg-agent-more">· migrations</span>
+                      <span className="sg-grow" />
+                      <span className="sg-needs">Needs you</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="sg-main">
-              <div className="sg-tab">
-                <Terminal size={14} strokeWidth={2} />
-                <span>1</span>
-                <X size={12} strokeWidth={2} className="sg-dim" />
+              <div className="sg-main">
+                <div className="sg-tab">
+                  <Terminal size={14} strokeWidth={2} />
+                  <span>1</span>
+                  <X size={12} strokeWidth={2} className="sg-dim" />
+                </div>
+                <Pane id={s.active} />
               </div>
-              <Pane id={s.active} />
             </div>
-          </div>
+            <div className="sg-layer" data-on={s.menuOpen || undefined}>
+              <Menu at={s.menu} hover={s.menuAt} />
+            </div>
+            <div className="sg-layer" data-on={s.dialog || undefined}>
+              <MoveDialog query={s.query} />
+            </div>
+          </>
         )
       }}
     </Stage>
