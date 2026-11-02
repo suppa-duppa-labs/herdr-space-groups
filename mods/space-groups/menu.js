@@ -5,7 +5,7 @@
 import { div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { run, props, closeOverlay, openOverlay, theme, keys, spaces, panes, exec, shared } from "herdr";
-import { MOD, load, groupOf, groupsOn, assign, remove, shift } from "./groups.js";
+import { MOD, load, groupOf, childrenOf, assign, remove, shift } from "./groups.js";
 
 // Other mods add to a space's menu through shared "space-groups.menu":
 // { <their name>: [{ label, icon?, spaces?, except?, overlay }] }. `spaces` / `except`
@@ -37,9 +37,11 @@ function items(p, git) {
   if (p.group) {
     const state = load();
     const g = state.groups.find((g) => g.id === p.group);
-    const mine = g ? groupsOn(state, g.machine) : [];
+    const mine = g ? childrenOf(state, g.machine, g.parent) : [];
     return [
       ["Rename group", "group.rename", { group: p.group }],
+      ["Add Sub Group…", "group.new", { parent: p.group }],
+      ["Move to group…", "group.move", { group: p.group }],
       ["Move up", "group.shift", { group: p.group, by: -1 }, mine[0] === g],
       ["Move down", "group.shift", { group: p.group, by: 1 }, mine.at(-1) === g],
       ["Delete group", "group.delete", { group: p.group }],
@@ -60,7 +62,7 @@ function items(p, git) {
 function menuIcon([, command, args]) {
   if (command === "item" && typeof args.icon === "string") return args.icon;
   if (command === "group.shift") return `mods/${MOD}/arrow-${args.by < 0 ? "up" : "down"}.svg`;
-  const name = command.endsWith(".close") || command === "group.delete" ? "x" : command.endsWith(".rename") ? "square-pen" : command === "worktree" ? "git-branch" : command === "group.move" ? "folder" : command === "group.leave" ? "minus" : command === "item" ? "folder-plus" : "terminal";
+  const name = command.endsWith(".close") || command === "group.delete" ? "x" : command.endsWith(".rename") ? "square-pen" : command === "worktree" ? "git-branch" : command === "group.move" ? "folder" : command === "group.leave" ? "minus" : command === "item" || command === "group.new" ? "folder-plus" : "terminal";
   return `mods/workspace-chrome/${name}.svg`;
 }
 
@@ -97,9 +99,10 @@ export default class Menu {
     const [, command, args] = it;
     if (command === "worktree") openOverlay({ mod: "worktree", kind: "dialog", ...(args.action === "open" ? { width: 560, height: 480 } : { width: 440, height: 260 }), props: args });
     else if (command === "item") openOverlay({ ...args.overlay, props: { ...args.overlay.props, space: props().space } });
-    else if (command === "group.move") openOverlay({ mod: MOD, kind: "dialog", width: 380, props: { role: "move", space: args.space } });
+    else if (command === "group.move") openOverlay({ mod: MOD, kind: "dialog", width: 380, props: { role: "move", ...args } });
     else if (command === "group.leave") assign(args.space, null);
-    else if (command === "group.rename") openOverlay({ mod: MOD, kind: "dialog", width: 380, props: { role: "rename", group: args.group } });
+    else if (command === "group.rename") openOverlay({ mod: MOD, kind: "dialog", width: 380, props: { role: "name", group: args.group } });
+    else if (command === "group.new") openOverlay({ mod: MOD, kind: "dialog", width: 380, props: { role: "name", parent: args.parent } });
     else if (command === "group.shift") shift(args.group, args.by);
     else if (command === "group.delete") remove(args.group);
     else run(command, args);
